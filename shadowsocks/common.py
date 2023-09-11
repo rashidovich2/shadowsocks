@@ -24,15 +24,11 @@ import logging
 
 
 def compat_ord(s):
-    if type(s) == int:
-        return s
-    return _ord(s)
+    return s if type(s) == int else _ord(s)
 
 
 def compat_chr(d):
-    if bytes == str:
-        return _chr(d)
-    return bytes([d])
+    return _chr(d) if bytes == str else bytes([d])
 
 
 _ord = ord
@@ -128,10 +124,7 @@ def pack_addr(address):
     for family in (socket.AF_INET, socket.AF_INET6):
         try:
             r = socket.inet_pton(family, address_str)
-            if family == socket.AF_INET6:
-                return b'\x04' + r
-            else:
-                return b'\x01' + r
+            return b'\x04' + r if family == socket.AF_INET6 else b'\x01' + r
         except (TypeError, ValueError, OSError, IOError):
             pass
     if len(address) > 255:
@@ -200,7 +193,7 @@ class IPNetwork(object):
             hi, lo = struct.unpack("!QQ", inet_pton(addr_family, block[0]))
             ip = (hi << 64) | lo
         else:
-            raise Exception("Not a valid CIDR notation: %s" % addr)
+            raise Exception(f"Not a valid CIDR notation: {addr}")
         if len(block) is 1:
             prefix_size = 0
             while (ip & 1) == 0 and ip is not 0:
@@ -212,7 +205,7 @@ class IPNetwork(object):
             prefix_size = addr_len - int(block[1])
             ip >>= prefix_size
         else:
-            raise Exception("Not a valid CIDR notation: %s" % addr)
+            raise Exception(f"Not a valid CIDR notation: {addr}")
         if addr_family is socket.AF_INET:
             self._network_list_v4.append((ip, prefix_size))
         else:

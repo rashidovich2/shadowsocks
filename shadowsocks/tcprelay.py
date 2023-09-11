@@ -213,13 +213,12 @@ class TCPRelayHandler(object):
                 self._update_stream(STREAM_UP, WAIT_STATUS_WRITING)
             else:
                 logging.error('write_all_to_sock:unknown socket')
+        elif sock == self._local_sock:
+            self._update_stream(STREAM_DOWN, WAIT_STATUS_READING)
+        elif sock == self._remote_sock:
+            self._update_stream(STREAM_UP, WAIT_STATUS_READING)
         else:
-            if sock == self._local_sock:
-                self._update_stream(STREAM_DOWN, WAIT_STATUS_READING)
-            elif sock == self._remote_sock:
-                self._update_stream(STREAM_UP, WAIT_STATUS_READING)
-            else:
-                logging.error('write_all_to_sock:unknown socket')
+            logging.error('write_all_to_sock:unknown socket')
         return True
 
     def _handle_stage_connecting(self, data):
@@ -327,8 +326,7 @@ class TCPRelayHandler(object):
         af, socktype, proto, canonname, sa = addrs[0]
         if self._forbidden_iplist:
             if common.to_str(sa[0]) in self._forbidden_iplist:
-                raise Exception('IP %s is in forbidden list, reject' %
-                                common.to_str(sa[0]))
+                raise Exception(f'IP {common.to_str(sa[0])} is in forbidden list, reject')
         remote_sock = socket.socket(af, socktype, proto)
         self._remote_sock = remote_sock
         self._fd_to_handlers[remote_sock.fileno()] = self
@@ -342,9 +340,7 @@ class TCPRelayHandler(object):
             self.destroy()
             return
         if result:
-            ip = result[1]
-            if ip:
-
+            if ip := result[1]:
                 try:
                     self._stage = STAGE_CONNECTING
                     remote_addr = ip
@@ -369,7 +365,7 @@ class TCPRelayHandler(object):
                             remote_sock.connect((remote_addr, remote_port))
                         except (OSError, IOError) as e:
                             if eventloop.errno_from_exception(e) == \
-                                    errno.EINPROGRESS:
+                                        errno.EINPROGRESS:
                                 pass
                         self._loop.add(remote_sock,
                                        eventloop.POLL_ERR | eventloop.POLL_OUT,
@@ -630,35 +626,32 @@ class TCPRelay(object):
         # tornado's timeout memory management is more flexible than we need
         # we just need a sorted last_activity queue and it's faster than heapq
         # in fact we can do O(1) insertion/remove so we invent our own
-        if self._timeouts:
-            logging.log(shell.VERBOSE_LEVEL, 'sweeping timeouts')
-            now = time.time()
-            length = len(self._timeouts)
-            pos = self._timeout_offset
-            while pos < length:
-                handler = self._timeouts[pos]
-                if handler:
-                    if now - handler.last_activity < self._timeout:
-                        break
-                    else:
-                        if handler.remote_address:
-                            logging.warn('timed out: %s:%d' %
-                                         handler.remote_address)
-                        else:
-                            logging.warn('timed out')
-                        handler.destroy()
-                        self._timeouts[pos] = None  # free memory
-                        pos += 1
+        if not self._timeouts:
+            return
+        logging.log(shell.VERBOSE_LEVEL, 'sweeping timeouts')
+        now = time.time()
+        length = len(self._timeouts)
+        pos = self._timeout_offset
+        while pos < length:
+            if handler := self._timeouts[pos]:
+                if now - handler.last_activity < self._timeout:
+                    break
+                if handler.remote_address:
+                    logging.warn('timed out: %s:%d' %
+                                 handler.remote_address)
                 else:
-                    pos += 1
-            if pos > TIMEOUTS_CLEAN_SIZE and pos > length >> 1:
-                # clean up the timeout queue when it gets larger than half
-                # of the queue
-                self._timeouts = self._timeouts[pos:]
-                for key in self._handler_to_timeouts:
-                    self._handler_to_timeouts[key] -= pos
-                pos = 0
-            self._timeout_offset = pos
+                    logging.warn('timed out')
+                handler.destroy()
+                self._timeouts[pos] = None  # free memory
+            pos += 1
+        if pos > TIMEOUTS_CLEAN_SIZE and pos > length >> 1:
+            # clean up the timeout queue when it gets larger than half
+            # of the queue
+            self._timeouts = self._timeouts[pos:]
+            for key in self._handler_to_timeouts:
+                self._handler_to_timeouts[key] -= pos
+            pos = 0
+        self._timeout_offset = pos
 
     def handle_event(self, sock, fd, event):
         # handle events and dispatch to handlers
@@ -680,17 +673,14 @@ class TCPRelay(object):
                 if error_no in (errno.EAGAIN, errno.EINPROGRESS,
                                 errno.EWOULDBLOCK):
                     return
-                else:
-                    shell.print_exception(e)
-                    if self._config['verbose']:
-                        traceback.print_exc()
+                shell.print_exception(e)
+                if self._config['verbose']:
+                    traceback.print_exc()
+        elif sock:
+            if handler := self._fd_to_handlers.get(fd, None):
+                handler.handle_event(sock, event)
         else:
-            if sock:
-                handler = self._fd_to_handlers.get(fd, None)
-                if handler:
-                    handler.handle_event(sock, event)
-            else:
-                logging.warn('poll removed fd')
+            logging.warn('poll removed fd')
 
     def handle_periodic(self):
         if self._closed:
