@@ -138,9 +138,6 @@ class UDPRelay(object):
             self._sockets.remove(client.fileno())
             self._eventloop.remove(client)
             client.close()
-        else:
-            # just an address
-            pass
 
     def _handle_server(self):
         server = self._server_socket
@@ -189,8 +186,7 @@ class UDPRelay(object):
             # TODO async getaddrinfo
             if self._forbidden_iplist:
                 if common.to_str(sa[0]) in self._forbidden_iplist:
-                    logging.debug('IP %s is in forbidden list, drop' %
-                                  common.to_str(sa[0]))
+                    logging.debug(f'IP {common.to_str(sa[0])} is in forbidden list, drop')
                     # drop
                     return
             client = socket.socket(af, socktype, proto)
@@ -213,9 +209,7 @@ class UDPRelay(object):
             client.sendto(data, (server_addr, server_port))
         except IOError as e:
             err = eventloop.errno_from_exception(e)
-            if err in (errno.EINPROGRESS, errno.EAGAIN):
-                pass
-            else:
+            if err not in (errno.EINPROGRESS, errno.EAGAIN):
                 shell.print_exception(e)
 
     def _handle_client(self, sock):
@@ -245,13 +239,8 @@ class UDPRelay(object):
                 return
             # addrtype, dest_addr, dest_port, header_length = header_result
             response = b'\x00\x00\x00' + data
-        client_addr = self._client_fd_to_server_addr.get(sock.fileno())
-        if client_addr:
+        if client_addr := self._client_fd_to_server_addr.get(sock.fileno()):
             self._server_socket.sendto(response, client_addr)
-        else:
-            # this packet is from somewhere else we know
-            # simply drop that packet
-            pass
 
     def add_to_loop(self, loop):
         if self._eventloop:

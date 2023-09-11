@@ -34,10 +34,10 @@ verbose = 0
 
 def check_python():
     info = sys.version_info
-    if info[0] == 2 and not info[1] >= 6:
+    if info[0] == 2 and info[1] < 6:
         print('Python 2.6+ required')
         sys.exit(1)
-    elif info[0] == 3 and not info[1] >= 3:
+    elif info[0] == 3 and info[1] < 3:
         print('Python 3.3+ required')
         sys.exit(1)
     elif info[0] not in [2, 3]:
@@ -60,7 +60,7 @@ def print_shadowsocks():
         version = pkg_resources.get_distribution('shadowsocks').version
     except Exception:
         pass
-    print('Shadowsocks %s' % version)
+    print(f'Shadowsocks {version}')
 
 
 def find_config():
@@ -68,9 +68,7 @@ def find_config():
     if os.path.exists(config_path):
         return config_path
     config_path = os.path.join(os.path.dirname(__file__), '../', 'config.json')
-    if os.path.exists(config_path):
-        return config_path
-    return None
+    return config_path if os.path.exists(config_path) else None
 
 
 def check_config(config, is_local):
@@ -99,8 +97,9 @@ def check_config(config, is_local):
     if config.get('local_address', '') in [b'0.0.0.0']:
         logging.warn('warning: local set to listen on 0.0.0.0, it\'s not safe')
     if config.get('server', '') in ['127.0.0.1', 'localhost']:
-        logging.warn('warning: server set to listen on %s:%s, are you sure?' %
-                     (to_str(config['server']), config['server_port']))
+        logging.warn(
+            f"warning: server set to listen on {to_str(config['server'])}:{config['server_port']}, are you sure?"
+        )
     if (config.get('method', '') or '').lower() == 'table':
         logging.warn('warning: table is not safe; please use a safer cipher, '
                      'like AES-256-CFB')
@@ -146,7 +145,7 @@ def get_config(is_local):
                 config_path = value
 
         if config_path:
-            logging.info('loading config from %s' % config_path)
+            logging.info(f'loading config from {config_path}')
             with open(config_path, 'rb') as f:
                 try:
                     config = parse_json_in_str(f.read().decode('utf8'))
